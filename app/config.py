@@ -1,33 +1,22 @@
-import os
-from dotenv import load_dotenv
+# app/config.py
 
 import boto3
 import json
+import os
 
-# Load environment variables
-load_dotenv()
-
-
-class Settings:
-    HUBSPOT_API_URL: str = os.getenv("HUBSPOT_API_URL", "https://api.hubapi.com/crm/v3/objects/contacts")
-    HUBSPOT_ACCESS_TOKEN: str = os.getenv("HUBSPOT_ACCESS_TOKEN")
-    API_PORT: int = int(os.getenv("API_PORT", 8000))
+REGION_NAME = os.getenv("AWS_REGION", "eu-west-2")  # Adjust to your region
+SECRET_ID = "flex_backend_core_service"  # The name of your secret in AWS Secrets Manager
 
 
-settings = Settings()
+def get_secret_dict(secret_id=SECRET_ID) -> dict:
+    client = boto3.client("secretsmanager", region_name=REGION_NAME)
+    response = client.get_secret_value(SecretId=secret_id)
+    return json.loads(response["SecretString"])
 
-AWS_REGION = "eu-west-2"
-SECRET_NAME = "rgbrebrnjytuekmfg456thjtghnd"
 
-
-def get_secret():
-    """Retrieve secrets from AWS Secrets Manager"""
-    session = boto3.session.Session()
-    client = session.client(service_name="secretsmanager", region_name=AWS_REGION)
-
-    try:
-        get_secret_value_response = client.get_secret_value(SecretId=SECRET_NAME)
-        return json.loads(get_secret_value_response["SecretString"])
-    except Exception as e:
-        print("Error retrieving secret:", e)
-        return {}
+def get_auth_credentials():
+    """
+    Returns (username, password) tuple from AWS Secrets Manager
+    """
+    secret = get_secret_dict()
+    return secret["username"], secret["password"]

@@ -1,16 +1,28 @@
-from fastapi import FastAPI
+# app/main.py
+
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
+from datetime import timedelta
 from app.routes import hubspot
+from app.services.auth import create_access_token, validate_user
+from app.models.schemas import Token
 
-app = FastAPI(title="HubSpot API", version="1.0", description="API for tracking users and storing data in HubSpot")
-
-# Include routes
-app.include_router(hubspot.router, prefix="/hubspot", tags=["HubSpot"])
+app = FastAPI()
 
 
-@app.get("/")
-async def root():
-    return {"message": "HubSpot Tracking API is Running"}
+# Auth endpoint
+@app.post("/token", response_model=Token)
+def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    validate_user(form_data.username, form_data.password)
+    token = create_access_token(
+        data={"sub": form_data.username}, expires_delta=timedelta(minutes=30)
+    )
+    return {"access_token": token, "token_type": "bearer"}
+
+
+# HubSpot routes
+app.include_router(hubspot.router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

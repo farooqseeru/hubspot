@@ -1,52 +1,40 @@
+import os
 import requests
-import logging
-from app.config import settings
+from app.models.schemas import Customer
+from app.utils.logger import logger
+from fastapi import HTTPException
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Best practice: store this in AWS Secrets Manager, not env
+HUBSPOT_ACCESS_TOKEN = os.getenv("HUBSPOT_ACCESS_TOKEN")  # Private App token
 
-HUBSPOT_API_URL = settings.HUBSPOT_API_URL
 
-HEADERS = {
-    "Authorization": f"Bearer {settings.HUBSPOT_ACCESS_TOKEN}",
-    "Content-Type": "application/json"
-}
-
-VALID_SOURCES = {
-    "direct": "DIRECT_TRAFFIC",
-    "organic_search": "ORGANIC_SEARCH",
-    "paid_search": "PAID_SEARCH",
-    "email": "EMAIL_MARKETING",
-    "social_media": "SOCIAL_MEDIA",
-    "referral": "REFERRALS",
-    "campaign": "OTHER_CAMPAIGNS",
-    "offline": "OFFLINE",
-    "paid_social": "PAID_SOCIAL"
-}
-
-def create_hubspot_contact(contact_data):
+def store_customer_in_hubspot(customer: Customer):
     """
-    Create a new contact in HubSpot with traffic source tracking.
+    Sends customer data to HubSpot CRM using Bearer auth (Private App Token).
+    Docs: https://developers.hubspot.com/docs/api/crm/contacts
     """
-    # Ensure the source is valid; default to "OTHER_CAMPAIGNS" if not
-    traffic_source = VALID_SOURCES.get(contact_data.source.lower(), "DIRECT_TRAFFIC")
+    url = "https://api.hubapi.com/crm/v3/objects/contacts"
 
-    data = {
+    payload = {
         "properties": {
-            "email": contact_data.email,
-            "firstname": contact_data.first_name,
-            "lastname": contact_data.last_name,
-            "hs_analytics_source": traffic_source  # ✅ Now using Original Traffic Source
+            "email": customer.email,
+            "firstname": customer.name,
+            "phone": customer.phone
         }
     }
 
-    response = requests.post(HUBSPOT_API_URL, headers=HEADERS, json=data)
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {HUBSPOT_ACCESS_TOKEN}"
+    }
 
-    if response.status_code == 201:
-        contact_id = response.json()["id"]
-        logger.info(f" Contact {contact_data.email} created successfully in HubSpot.")
-        return {"contact_id": contact_id, "email": contact_data.email, "status": "Created"}
-
-    logger.error(f" Error creating contact: {response.json()}")
-    return {"error": response.json()}
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except requests.HTTPError as e:
+        logger.error(f"HubSpot API returned error: {e.response.status_code} - {e.response.text}")
+        raise HTTPException(status_code=500, detail="HubSpot API error")
+    except Exception as e:
+        logger.error(f"Unexpected error while storing customer: {e}")
+        raise Exception("Unexpected HubSpot error")

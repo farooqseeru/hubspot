@@ -1,15 +1,19 @@
-from pydantic import BaseModel, EmailStr
+# app/models/schemas.py
+
+from pydantic import BaseModel
 from typing import Optional
 
 
-class ContactCreate(BaseModel):
-    email: EmailStr
-    first_name: str
-    last_name: str
-    source: str
+class Customer(BaseModel):
+    name: str
+    email: str
+    phone: Optional[str] = None
 
 
-class ContactResponse(BaseModel):
-    contact_id: str
-    email: EmailStr
-    status: str
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
